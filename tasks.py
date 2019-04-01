@@ -1,43 +1,30 @@
-import os
-import time
-from celery import Celery
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
-
-env = os.environ
-CELERY_BROKER_URL = env.get(
-    'CELERY_BROKER_URL', 'amqp://worker:duongtang2019@localhost/duongtang')
-SQLALCHEMY_DATABASE_URI = env.get(
-    'SQLALCHEMY_DATABASE_URI',
-    'mysql+pymysql://root:duongtang2019@127.0.0.1/duongtang?charset=utf8')
-
-app = Celery('tasks',
-             broker=CELERY_BROKER_URL)
+from datetime import datetime
+from worker import celery, DbTask
+from db import Base
+from sqlalchemy import Column, Integer, String, DateTime, BigInteger, Text
 
 
-def get_engine_session():
-    Session = sessionmaker()
-    engine = create_engine(SQLALCHEMY_DATABASE_URI)
-    Session.configure(bind=engine)
-    return Session()
+class Config(Base):
+    __tablename__ = 'configs'
+
+    ACTIVE_STATUS = 1
+    INACTIVE_STATUS = 0
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String(255), nullable=False)
+    value = Column(Text, nullable=False, default='')
+    group = Column(String(128), nullable=False)
+    expired_to = Column(BigInteger, nullable=False)
+    status = Column(Integer, default=ACTIVE_STATUS)
+    created_date = Column(
+        DateTime, nullable=True, default=datetime.utcnow)
+    updated_date = Column(DateTime, onupdate=datetime.utcnow)
+    deleted_date = Column(DateTime, nullable=True, default=None)
+    updated_timestamp = Column(BigInteger, nullable=True)
 
 
-class DbTask(app.Task):
-    _session = None
-
-    def after_return(self, *args, **kargs):
-        if self._session is not None:
-            self._session.remove()
-
-    @property
-    def session(self):
-        if self._session is None:
-            self._session = get_engine_session()
-        return self._session
-
-
-@app.task(base=DbTask, name='duongtang.add', bind=True)
-def add(x, y):
+@celery.task(base=DbTask, name='duongtang.add', bind=True)
+def add(self, x, y):
     # lets sleep for a while before doing the gigantic addition task!
-    time.sleep(5)
-    return x + y
+    configs = self.session.query(Config).all()
+    [print(config.__dict__) for config in configs]

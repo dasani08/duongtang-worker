@@ -9,7 +9,6 @@ setup(
     install_requires=[
         'SQLAlchemy',
         'PyMySQL',
-        'celery',
-        'flower'
+        'celery'
     ]
 )
