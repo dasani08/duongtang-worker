@@ -1,13 +1,14 @@
 import os
 from celery import Celery
-from db import get_engine_session
+from core.db import get_engine_session
 
 env = os.environ
 CELERY_BROKER_URL = env.get(
     'CELERY_BROKER_URL', 'amqp://worker:duongtang2019@localhost/duongtang')
 
 celery = Celery(__name__,
-                broker=CELERY_BROKER_URL)
+                broker=CELERY_BROKER_URL,
+                task_protocol=1)
 
 
 class DbTask(celery.Task):
@@ -18,7 +19,7 @@ class DbTask(celery.Task):
             self._session.remove()
 
     @property
-    def session(self):
+    def db_session(self):
         if self._session is None:
             self._session = get_engine_session()
         return self._session

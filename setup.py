@@ -7,8 +7,10 @@ setup(
     include_package_data=True,
     zip_safe=False,
     install_requires=[
+        'cryptography==2.6.1',
         'SQLAlchemy',
         'PyMySQL',
+        'requests',
         'celery'
     ]
 )
