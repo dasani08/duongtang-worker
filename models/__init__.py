@@ -1,9 +1,13 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy import Column, Integer, String, DateTime, BigInteger, Text
 from sqlalchemy.orm import load_only
 
 from core.db import Base
 from core.utils import get_unix_time
+
+
+GDRIVE_API_KEY = 'GDRIVE_API_KEY'
+GDRIVE_COOKIE_KEY = 'GMAIL_COOKIE'
 
 
 class BaseModelMixin(object):
@@ -27,7 +31,7 @@ class Config(Base, BaseModelMixin):
     key = Column(String(255), nullable=False)
     value = Column(Text, nullable=False, default='')
     group = Column(String(128), nullable=False)
-    expired_to = Column(BigInteger, nullable=False)
+    expired_to = Column(Integer, nullable=False)
     status = Column(Integer, default=ACTIVE_STATUS)
     updated_timestamp = Column(BigInteger, nullable=True)
 
@@ -58,6 +62,27 @@ class Config(Base, BaseModelMixin):
             """
             return config_dict
         return None
+
+    @classmethod
+    def disable_cookie(cls, session, email):
+        # Gets cookie
+        session.query(cls).filter_by(
+            key=GDRIVE_COOKIE_KEY, group=email).update({
+                'status': Config.INACTIVE_STATUS,
+                'deleted_date': datetime.now()
+            })
+        session.commit()
+
+    @classmethod
+    def limit_cookie(cls, session, email):
+        next_day = int(datetime.timestamp(
+            datetime.now() + timedelta(days=1)))
+        # Gets cookie
+        session.query(cls).filter_by(
+            key=GDRIVE_COOKIE_KEY, group=email).update({
+                'expired_to': next_day
+            })
+        session.commit()
 
 
 class Source(Base, BaseModelMixin):

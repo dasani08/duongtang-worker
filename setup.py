@@ -11,6 +11,6 @@ setup(
         'SQLAlchemy',
         'PyMySQL',
         'requests',
-        'celery'
+        'pika'
     ]
 )

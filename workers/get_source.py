@@ -1,11 +1,14 @@
 import requests
 import json
+import logging
 from os import environ as env
 from urllib.parse import urlparse, parse_qsl
+from core.pika import PikaConsumer, LOGGER, LOG_FORMAT
+from core.db import get_engine_session
 
-from core.worker import celery, DbTask
 from core.utils import parse_cookie
 from models import Source, Config
+from workers.upload import UploadPublisher
 
 ITAG_EXTENSION = {
     "5": "flv",
@@ -36,6 +39,10 @@ ITAG_RESOLUTION = {
 GDRIVE_API_KEY = 'GDRIVE_API_KEY'
 GDRIVE_COOKIE_KEY = 'GMAIL_COOKIE'
 NUMBER_OF_CLONE = env.get('NUMBER_OF_CLONE', 3)
+AMQP_BROKER_URL = env.get(
+    'AMQP_BROKER_URL', 'amqp://worker:duongtang2019@localhost/duongtang')
+
+uploader = UploadPublisher(AMQP_BROKER_URL)
 
 
 def get_video_info(drive_id):
@@ -100,9 +107,9 @@ def send_msg_to_uploader(db_session, drive_id):
     cookie = get_cookie(db_session)
 
     if api_key is None:
-        raise Exception('No api key found, should retry after 60 seconds')
+        raise Exception('No api key found')
     if cookie is None:
-        raise Exception('No cookie found, should retry after 60 seconds')
+        raise Exception('No cookie found')
 
     content = {
         'cookie': cookie['value'],
@@ -111,29 +118,53 @@ def send_msg_to_uploader(db_session, drive_id):
         'apikey': api_key['value']
     }
 
-    celery.send_task(
-        'duongtang.upload',
-        args=[content],
-        kwargs={},
-        queue='upload', exchange='upload', routing_key='upload')
+    uploader.publish(json.dumps(content, ensure_ascii=False))
 
 
-@celery.task(
-    base=DbTask,
-    name='duongtang.get_source',
-    bind=True,
-    acks_late=True)
-def get_source(self, drive_id, user_id):
-    try:
-        source = get_video_info(drive_id)
-        source['source_link'] = json.dumps(source['source_link'])
-        source['user_id'] = user_id
-        # update_source(source)
-        self.db_session.query(Source).filter_by(
-            source_id=drive_id).update(source)
-        self.db_session.commit()
-        # TODO: send upload google photo task
-        for x in range(NUMBER_OF_CLONE):
-            send_msg_to_uploader(self.db_session, drive_id)
-    except Exception as exc:
-        raise self.retry(exc, countdown=60)
+class SourceConsumer(PikaConsumer):
+    ROUTING_KEY = 'default.source'
+    QUEUE = 'source'
+    _session = None
+
+    def on_connection_closed(self, *args, **kwargs):
+        super().on_connection_closed(*args, **kwargs)
+        if self._session is not None:
+            self._session.close()
+
+    @property
+    def db_session(self):
+        if self._session is None:
+            self._session = get_engine_session()
+        return self._session
+
+    def on_message(self, _unused_channel, basic_deliver, properties, body):
+        LOGGER.info('Received message # %s from %s: %s',
+                    basic_deliver.delivery_tag, properties.app_id, body)
+        try:
+            content = json.loads(body)
+            drive_id = content['drive_id']
+            user_id = content['user_id']
+
+            source = get_video_info(drive_id)
+            source['source_link'] = json.dumps(source['source_link'])
+            source['user_id'] = user_id
+            # update_source(source)
+            self.db_session.query(Source).filter_by(
+                source_id=drive_id).update(source)
+            self.db_session.commit()
+            # TODO: send upload google photo task
+            for x in range(NUMBER_OF_CLONE):
+                send_msg_to_uploader(self.db_session, drive_id)
+        except Exception as exc:
+            LOGGER.error('Something went wrong! {}'.format(exc))
+        self.acknowledge_message(basic_deliver.delivery_tag)
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+    consumer = SourceConsumer(AMQP_BROKER_URL)
+    consumer.run()
+
+
+if __name__ == '__main__':
+    main()
