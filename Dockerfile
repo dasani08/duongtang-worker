@@ -7,7 +7,9 @@ RUN apk update && apk add tzdata &&\
     echo "Asia/Ho_Chi_Minh" > /etc/timezone &&\ 
     apk del tzdata && rm -rf /var/cache/apk/*
 
-COPY requirement.txt requirement.txt
+WORKDIR /app
+
+COPY requirement.txt /app
 RUN apk add --virtual .build-deps \
     gcc \
     musl-dev \
@@ -17,13 +19,8 @@ RUN apk add --virtual .build-deps \
     && pip install --no-cache-dir -r requirement.txt \
     && apk del .build-deps
 
-ENV APP_DIR /app
 ENV WORKER default
 
-VOLUME [${APP_DIR}]
-WORKDIR ${APP_DIR}
-
-COPY start.sh .
-RUN chmod +x start.sh
+COPY start.sh /app
 
 ENTRYPOINT ["/app/start.sh"]

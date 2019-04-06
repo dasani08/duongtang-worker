@@ -1,2 +1,2 @@
 #!/bin/bash
-python3 -m workers.${WORKER}
+python -m workers.${WORKER}
