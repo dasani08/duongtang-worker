@@ -38,7 +38,7 @@ ITAG_RESOLUTION = {
 
 GDRIVE_API_KEY = 'GDRIVE_API_KEY'
 GDRIVE_COOKIE_KEY = 'GMAIL_COOKIE'
-NUMBER_OF_CLONE = env.get('NUMBER_OF_CLONE', 3)
+NUMBER_OF_CLONE = env.get('NUMBER_OF_CLONE', 1)
 AMQP_BROKER_URL = env.get(
     'AMQP_BROKER_URL', 'amqp://worker:duongtang2019@localhost/duongtang')
 
@@ -161,7 +161,8 @@ class SourceConsumer(PikaConsumer):
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+    logging.basicConfig(level=env.get(
+        'LOG_LEVEL', logging.INFO), format=LOG_FORMAT)
     consumer = SourceConsumer(AMQP_BROKER_URL)
     consumer.run()
 

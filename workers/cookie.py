@@ -44,7 +44,8 @@ class CookieConsumer(PikaConsumer):
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+    logging.basicConfig(level=env.get(
+        'LOG_LEVEL', logging.INFO), format=LOG_FORMAT)
     consumer = CookieConsumer(AMQP_BROKER_URL)
     consumer.run()
 
