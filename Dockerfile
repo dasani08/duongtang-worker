@@ -21,6 +21,6 @@ RUN apk add --virtual .build-deps \
 
 ENV WORKER default
 
-COPY start.sh /app
+COPY start.sh /app/start.sh
 
 ENTRYPOINT ["/app/start.sh"]
