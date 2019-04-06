@@ -24,5 +24,6 @@ VOLUME [${APP_DIR}]
 WORKDIR ${APP_DIR}
 
 COPY start.sh .
+CMD chmod +x start.sh
 
 ENTRYPOINT ["/app/start.sh"]
