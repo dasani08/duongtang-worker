@@ -98,3 +98,20 @@ class Source(Base, BaseModelMixin):
     duration = Column(Integer, nullable=True)
     title = Column(String(255), nullable=True)
     clone = Column(Integer, default=3)
+
+
+class Stream(Base):
+    __tablename__ = 'streams'
+
+    STATUS_CODE_ACTIVE = 200
+    STATUS_CODE_DIE = 404
+    STATUS_CODE_NOT_PERM = 401
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    drive_id = Column(String(128), nullable=False)
+    gphoto_url = Column(Text, nullable=False)
+    email = Column(String(128), nullable=False)
+    expired = Column(Integer, nullable=True)
+    duration = Column(Integer, nullable=True)
+    title = Column(String(255), nullable=True)
+    status_code = Column(Integer, nullable=True)

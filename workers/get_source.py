@@ -7,7 +7,7 @@ from core.pika import PikaConsumer, LOGGER, LOG_FORMAT
 from core.db import get_engine_session
 
 from core.utils import parse_cookie
-from models import Source, Config
+from models import Source, Config, Stream
 from workers.upload import UploadPublisher
 
 ITAG_EXTENSION = {
@@ -145,6 +145,19 @@ class SourceConsumer(PikaConsumer):
             drive_id = content['drive_id']
             user_id = content['user_id']
 
+            """
+            If drive_id has been existing in stream table,
+            We do not need to push new message to uploader
+            """
+            stream = self.db_session.query(Stream).filter_by(
+                drive_id=drive_id,
+                status_code=Stream.STATUS_CODE_ACTIVE).first()
+
+            if stream is not None:
+                raise Exception(
+                    'A stream link has been already \
+                    existing for drive: {}'.format(drive_id))
+
             source = get_video_info(drive_id)
             source['source_link'] = json.dumps(source['source_link'])
             source['user_id'] = user_id
@@ -157,7 +170,8 @@ class SourceConsumer(PikaConsumer):
                 send_msg_to_uploader(self.db_session, drive_id)
         except Exception as exc:
             LOGGER.error('Something went wrong! {}'.format(exc))
-        self.acknowledge_message(basic_deliver.delivery_tag)
+        finally:
+            self.acknowledge_message(basic_deliver.delivery_tag)
 
 
 def main():
