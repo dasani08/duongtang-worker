@@ -1,6 +1,7 @@
 import functools
 import logging
 import pika
+import uuid
 
 LOG_FORMAT = ('%(levelname) -10s %(asctime)s %(name) -30s %(funcName) '
               '-35s %(lineno) -5d: %(message)s')
@@ -230,4 +231,5 @@ class PikaPublisher(object):
             message,
             pika.BasicProperties(
                 content_type='application/json',
+                message_id=str(uuid.uuid4()),
                 delivery_mode=1))

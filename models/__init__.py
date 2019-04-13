@@ -68,8 +68,7 @@ class Config(Base, BaseModelMixin):
         # Gets cookie
         session.query(cls).filter_by(
             key=GDRIVE_COOKIE_KEY, group=email).update({
-                'status': Config.INACTIVE_STATUS,
-                'deleted_date': datetime.now()
+                'status': Config.INACTIVE_STATUS
             })
         session.commit()
 
@@ -115,3 +114,19 @@ class Stream(Base):
     duration = Column(Integer, nullable=True)
     title = Column(String(255), nullable=True)
     status_code = Column(Integer, nullable=True)
+
+
+class UploadQueueLog(Base):
+    __tablename__ = 'upload_queue_logs'
+
+    STATUS_READY = 'ready'
+    STATUS_COMPLETE = 'complete'
+    STATUS_CANCEL = 'cancel'
+
+    # uuid
+    message_id = Column(String(36), primary_key=True)
+    drive_id = Column(String(128), nullable=True)
+    email = Column(String(128), nullable=True, index=True)
+    status = Column(String(16), default=STATUS_READY)
+    created_date = Column(
+        DateTime, nullable=True, default=datetime.utcnow)
