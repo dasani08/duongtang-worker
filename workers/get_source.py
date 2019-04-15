@@ -5,6 +5,7 @@ from os import environ as env
 from urllib.parse import urlparse, parse_qsl
 from core.pika import PikaConsumer, LOGGER, LOG_FORMAT
 from core.db import get_engine_session
+from sqlalchemy.exc import SQLAlchemyError
 
 from core.utils import parse_cookie
 from models import Source, Config, Stream
@@ -162,9 +163,13 @@ class SourceConsumer(PikaConsumer):
             source['source_link'] = json.dumps(source['source_link'])
             source['user_id'] = user_id
             # update_source(source)
-            self.db_session.query(Source).filter_by(
-                source_id=drive_id).update(source)
-            self.db_session.commit()
+            try:
+                self.db_session.query(Source).filter_by(
+                    source_id=drive_id).update(source)
+                self.db_session.commit()
+            except SQLAlchemyError as exc:
+                LOGGER.info(exc)
+                self.db_session.rollback()
             # TODO: send upload google photo task
             for x in range(NUMBER_OF_CLONE):
                 send_msg_to_uploader(self.db_session, drive_id)
