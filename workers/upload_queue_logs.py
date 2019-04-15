@@ -4,6 +4,7 @@ from os import environ as env
 from core.pika import PikaConsumer, LOGGER, LOG_FORMAT
 from core.db import get_engine_session
 from models import UploadQueueLog
+from sqlalchemy.exc import SQLAlchemyError
 
 logging.basicConfig(level=env.get(
     'LOG_LEVEL', logging.INFO), format=LOG_FORMAT)
@@ -31,13 +32,16 @@ class UploadQueueLogConsumer(PikaConsumer):
         try:
             body = json.loads(body)
             if 'email' in body and 'driveid' in body:
-                self.db_session().add(UploadQueueLog(
+                self.db_session.add(UploadQueueLog(
                     message_id=properties.message_id,
                     email=body['email'],
                     drive_id=body['driveid']))
-                self.db_session().commit()
+                self.db_session.commit()
         except json.JSONDecodeError:
             LOGGER.error('JSONDecodeError')
+        except SQLAlchemyError as exc:
+            self.db_session.rollback()
+            LOGGER.info(exc)
         except Exception as exc:
             LOGGER.error('Something went wrong! {}'.format(exc))
         self.acknowledge_message(basic_deliver.delivery_tag)
