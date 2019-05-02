@@ -1,5 +1,6 @@
 import logging
 import json
+import time
 from os import environ as env
 from core.pika import PikaConsumer, LOGGER, LOG_FORMAT
 from core.db import get_engine_session
@@ -84,6 +85,7 @@ class RecheckConsumer(PikaConsumer):
         except InvalidMessageError:
             self.acknowledge_message(basic_deliver.delivery_tag)
         except (NoCookieError, NoApiKeyError):
+            time.sleep(300)
             pass    # Should keep the message on queue
         except Exception as exc:
             LOGGER.info('Something went wrong! {}'.format(exc))
