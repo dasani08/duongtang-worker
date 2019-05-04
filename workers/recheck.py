@@ -48,6 +48,9 @@ class RecheckConsumer(PikaConsumer):
         return self._upload_publisher
 
     def on_message(self, _unused_channel, basic_deliver, properties, body):
+        # keep up with uploaders by not working so fast
+        time.sleep(0.5)
+
         LOGGER.info('Received message # %s from %s: %s',
                     basic_deliver.delivery_tag, properties.app_id, body)
         try:
