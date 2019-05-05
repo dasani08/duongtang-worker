@@ -2,6 +2,7 @@ import functools
 import logging
 import pika
 import uuid
+import json
 
 LOG_FORMAT = ('%(levelname) -10s %(asctime)s %(name) -30s %(funcName) '
               '-35s %(lineno) -5d: %(message)s')
@@ -207,29 +208,29 @@ class PikaPublisher(object):
     EXCHANGE_DURABLE = True
     QUEUE_DURABLE = True
 
-    _channel = None
     _connection = None
+    _url = None
 
     def __init__(self, amqp_url):
-        parameters = pika.URLParameters(amqp_url)
-        self._connection = pika.BlockingConnection(parameters)
-        self._channel = self._connection.channel()
-        self._channel.exchange_declare(
-            exchange="default",
-            exchange_type="direct",
-            passive=False,
-            durable=self.EXCHANGE_DURABLE,
-            auto_delete=False)
-        self._channel.queue_bind(
-            self.QUEUE,
-            self.EXCHANGE,
-            routing_key=self.ROUTING_KEY)
+        self._url = amqp_url
+        self._connection = self.connect()
+
+    def connect(self):
+        parameters = pika.URLParameters(self._url)
+        return pika.BlockingConnection(parameters)
+
+    def channel(self):
+        if (self._connection is None or self._connection.is_closed):
+            self._connection = self.connect()
+        return self._connection.channel()
 
     def publish(self, message):
-        self._channel.basic_publish(
+        channel = self.channel()
+        channel.basic_publish(
             self.EXCHANGE, self.ROUTING_KEY,
-            message,
+            json.dumps(message, ensure_ascii=False),
             pika.BasicProperties(
                 content_type='application/json',
                 message_id=str(uuid.uuid4()),
                 delivery_mode=1))
+        channel.close()

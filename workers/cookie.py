@@ -85,8 +85,8 @@ class CookieConsumer(PikaConsumer):
             'driveid': drive_id,
             'email': cookie['group']
         }
-        self.upload_publisher.publish(
-            json.dumps(msg, ensure_ascii=False))
+
+        self.upload_publisher.publish(msg)
 
 
 def main():

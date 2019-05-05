@@ -79,8 +79,7 @@ class RecheckConsumer(PikaConsumer):
                 'driveid': body['driveid'],
                 'email': cookie['group']
             }
-            self.upload_publisher.publish(
-                json.dumps(msg, ensure_ascii=False))
+            self.upload_publisher.publish(msg)
             self.acknowledge_message(basic_deliver.delivery_tag)
         except json.JSONDecodeError:
             LOGGER.info('JSONDecodeError')
