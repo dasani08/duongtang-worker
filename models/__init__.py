@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from sqlalchemy import Column, Integer, String, DateTime, BigInteger, Text
 from sqlalchemy.orm import load_only
+from sqlalchemy.exc import SQLAlchemyError
 
 from core.db import Base
 from core.utils import get_unix_time
@@ -76,12 +77,14 @@ class Config(Base, BaseModelMixin):
     def limit_cookie(cls, session, email):
         next_day = int(datetime.timestamp(
             datetime.now() + timedelta(days=1)))
-        # Gets cookie
-        session.query(cls).filter_by(
-            key=GDRIVE_COOKIE_KEY, group=email).update({
-                'expired_to': next_day
-            })
-        session.commit()
+        try:
+            session.query(cls).filter_by(
+                key=GDRIVE_COOKIE_KEY, group=email).update({
+                    'expired_to': next_day
+                })
+            session.commit()
+        except SQLAlchemyError:
+            session.rollback()
 
 
 class Source(Base, BaseModelMixin):

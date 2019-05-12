@@ -176,13 +176,22 @@ class PikaConsumer(object):
         LOGGER.info('Closing the channel')
         self._channel.close()
 
-    def publish_message(self, message, routing_key=None, properties=None):
+    def publish_message(
+            self, message, exchange=None, routing_key=None, properties=None):
         if self._channel is None or not self._channel.is_open:
             return
         if routing_key is None:
             routing_key = self.ROUTING_KEY
-        self._channel.publish_message(
-            self.EXCHANGE, self.ROUTING_KEY, message, properties)
+        if exchange is None:
+            exchange = self.EXCHANGE
+        if properties is None:
+            properties = pika.BasicProperties(
+                content_type='application/json',
+                message_id=str(uuid.uuid4()))
+        self._channel.basic_publish(
+            exchange,
+            routing_key,
+            json.dumps(message, ensure_ascii=False), properties)
 
     def run(self):
         self._connection = self.connect()
