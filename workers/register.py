@@ -66,7 +66,7 @@ class RegisterConsumer(PikaConsumer):
                 hash=body['hash'])
             message = """Subject: {app_name} - Please confirm your registration
 
-Please confirm your registration by click this link {link}.""".format(
+Please confirm your registration by click this link {link}""".format(
                 app_name=APP_NAME, link=confirmation_link)
             mailer.send(body['email'], message)
         except json.JSONDecodeError:
