@@ -56,7 +56,7 @@ class RegisterConsumer(PikaConsumer):
         try:
             body = json.loads(body)
             confirmation_link = (
-                "http://{app_domain}/verify?"
+                "http://{app_domain}/account/verify?"
                 "active_code={active_code}&"
                 "expired={expired}&"
                 "hash={hash}").format(
