@@ -10,7 +10,7 @@ AMQP_BROKER_URL = env.get(
     'AMQP_BROKER_URL', 'amqp://worker:duongtang2019@localhost/duongtang')
 
 APP_NAME = 'Duongtang'
-APP_DOMAIN = 'duongtang.clgt.vn'
+APP_DOMAIN = env.get('APP_DOMAIN', 'duongtang.clgt.vn')
 APP_NOREPLY_EMAIL_ADDRESS = 'noreply@localhost'
 
 
@@ -56,7 +56,7 @@ class RegisterConsumer(PikaConsumer):
         try:
             body = json.loads(body)
             confirmation_link = (
-                "http://{app_domain}/account/verify?"
+                "https://{app_domain}/account/verify?"
                 "active_code={active_code}&"
                 "expired={expired}&"
                 "hash={hash}").format(
