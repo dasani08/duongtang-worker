@@ -3,7 +3,7 @@ import json
 from os import environ as env
 from core.pika import PikaConsumer, LOGGER, LOG_FORMAT
 from core.db import get_engine_session
-from models import Config, UploadQueueLog, GDRIVE_API_KEY, GDRIVE_COOKIE_KEY
+from models import Config, GDRIVE_API_KEY, GDRIVE_COOKIE_KEY
 from workers.upload import UploadPublisher
 
 
@@ -40,22 +40,6 @@ class CookieConsumer(PikaConsumer):
                 LOGGER.info(
                     "Cookie of email: {} has been disabled".format(
                         body['email']))
-                # Gets all upload_queue_logs
-                upload_queue_logs = self.db_session.query(
-                    UploadQueueLog).filter_by(
-                        email=body['email'],
-                        status=UploadQueueLog.STATUS_READY).all()
-                # Start db transaction
-                # 1. Requeue for uploader
-                for log in upload_queue_logs:
-                    self._reupload(log.drive_id)
-                # 2. Update status for upload queue logs
-                self.db_session.query(UploadQueueLog).filter_by(
-                    email=body['email']
-                ).update({
-                    'status': UploadQueueLog.STATUS_CANCEL
-                })
-                self.db_session.commit()
         except json.JSONDecodeError:
             LOGGER.error('JSONDecodeError')
         except Exception as exc:
