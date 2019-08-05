@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
-from sqlalchemy import Column, Integer, String, DateTime, BigInteger, Text
+from sqlalchemy import Column, Integer, String, DateTime, BigInteger, Text, \
+    Index
 from sqlalchemy.orm import load_only
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -87,49 +88,60 @@ class Config(Base, BaseModelMixin):
             session.rollback()
 
 
-class Source(Base, BaseModelMixin):
-    __tablename__ = 'sources'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    type = Column(String(128), nullable=False, default='drive')
-    source_id = Column(String(128), nullable=False)
-    user_id = Column(Integer, nullable=True)
-    source_link = Column(Text, nullable=True)
-    cookie = Column(String(255), nullable=True)
-    expire = Column(Integer, nullable=True)
-    duration = Column(Integer, nullable=True)
-    title = Column(String(255), nullable=True)
-    clone = Column(Integer, default=3)
-
-
-class Stream(Base):
+class Stream(BaseModelMixin):
     __tablename__ = 'streams'
 
-    STATUS_CODE_ACTIVE = 200
-    STATUS_CODE_DIE = 404
-    STATUS_CODE_NOT_PERM = 401
-
     id = Column(Integer, primary_key=True, autoincrement=True)
-    drive_id = Column(String(128), nullable=False)
-    gphoto_url = Column(Text, nullable=False)
-    email = Column(String(128), nullable=False)
+    source_id = Column(String(256), nullable=False)
+    user_id = Column(Integer, nullable=False)
+    source_type = Column(String(128), nullable=False)
+    type = Column(String(128), nullable=True, default="photo")
+    result = Column(Text, nullable=True)
+    email = Column(String(128), nullable=True)
     expired = Column(Integer, nullable=True)
     duration = Column(Integer, nullable=True)
     title = Column(String(255), nullable=True)
-    status_code = Column(Integer, nullable=True)
+    status_code = Column(Integer, nullable=True, default=200)
+    updated_timestamp = Column(BigInteger, nullable=True)
+
+    __table_args__ = (
+        Index('idx_source_id', source_id),
+    )
 
 
-class UploadQueueLog(Base):
-    __tablename__ = 'upload_queue_logs'
+class UserDrive(Base, BaseModelMixin):
+    __tablename__ = 'user_drives'
 
-    STATUS_READY = 'ready'
-    STATUS_COMPLETE = 'complete'
-    STATUS_CANCEL = 'cancel'
+    PENDING_STATUS = 'pending'
+    EXTRACTING_STATUS = 'extracting'
+    FINISHED_STATUS = 'finished'
+    ERROR_STATUS = 'error'
 
-    # uuid
-    message_id = Column(String(36), primary_key=True)
-    drive_id = Column(String(128), nullable=True)
-    email = Column(String(128), nullable=True, index=True)
-    status = Column(String(16), default=STATUS_READY)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False)
+    drive_id = Column(String(255), nullable=False)
+    total_file = Column(Integer, nullable=True, default=0)
+    status = Column(String(128), nullable=True, default=PENDING_STATUS)
+    api_key = Column(String(128), nullable=True)
+    created_date = Column(DateTime, nullable=True,
+                          default=datetime.utcnow)
+    updated_date = Column(DateTime, onupdate=datetime.utcnow)
+
+
+class UserApp(Base):
+    __tablename__ = 'user_apps'
+
+    ACTIVE_STATUS = 1
+    INACTIVE_STATUS = 0
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False)
+    api_key = Column(String(128), nullable=False)
+    stream_type = Column(
+        String(128), nullable=False, default='photo, proxy')
+    status = Column(Integer, default=0)
     created_date = Column(
         DateTime, nullable=True, default=datetime.utcnow)
+    domain = Column(String(256), nullable=True)
+    short_domain = Column(String(256), nullable=True,
+                          default='https://go.clgt.vn')
