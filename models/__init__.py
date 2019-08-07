@@ -109,7 +109,7 @@ class Stream(BaseModelMixin):
     )
 
 
-class UserDrive(Base, BaseModelMixin):
+class UserDrive(Base):
     __tablename__ = 'user_drives'
 
     PENDING_STATUS = 'pending'
@@ -145,3 +145,14 @@ class UserApp(Base):
     domain = Column(String(256), nullable=True)
     short_domain = Column(String(256), nullable=True,
                           default='https://go.clgt.vn')
+
+
+class BalanceLog(Base):
+    __tablename__ = 'balance_logs'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False)
+    transaction_timestamp = Column(BigInteger, nullable=False)
+    balance = Column(Integer, nullable=True, default=0)
+    transaction_type = Column(String(32), nullable=True, default='VIEW')
+    source_id = Column(String(255), nullable=True)

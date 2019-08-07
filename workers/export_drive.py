@@ -7,10 +7,14 @@ import boto3
 import requests
 from urllib.parse import urlencode
 from sqlalchemy.exc import SQLAlchemyError
-from core.pika import PikaConsumer, LOG_FORMAT
+from core.pika import PikaConsumer
 from core.db import get_engine_session
-from models import Config, UserDrive, GDRIVE_API_KEY
+from core.utils import get_unix_time
+from models import Config, UserDrive, BalanceLog, GDRIVE_API_KEY
 
+
+LOG_FORMAT = (
+    '[%(asctime)s] [%(levelname)s] [%(module)s] %(funcName)s: %(message)s')
 AMQP_BROKER_URL = env.get(
     'AMQP_BROKER_URL', 'amqp://worker:duongtang2019@localhost/duongtang')
 S3_BUCKET = 'duongtang'
@@ -23,17 +27,20 @@ DRIVE_FILE_MIME_TYPES = {
     'g_file': 'application/vnd.google-apps.file',
     'g_folder': 'application/vnd.google-apps.folder'
 }
-NUM_EXTRACTING_FOLDER = 10
+CONCURRENT_EXTRACTING_FOLDER = 10
 MAX_EXTRACTING_WORKER = 1
 
-LOGGER = logging.getLogger(__name__)
-
+logger = logging.getLogger(__name__)
 client = boto3.client(
     's3',
     aws_access_key_id=AWS_ACCESS_KEY_ID,
     aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
     region_name=AWS_REGION
 )
+
+
+class WorkerException(Exception):
+    pass
 
 
 class DriveService:
@@ -67,6 +74,7 @@ class DriveService:
                          headers={"Accept": "application/json"})
 
         if r.status_code != 200:
+            logger.info('can not get files')
             return [], [], None
 
         content = r.json()
@@ -110,16 +118,16 @@ class DriveExtractorConsumer(PikaConsumer):
     def upload_to_s3(self, filename):
         with open("{}/{}".format(self.TMP_DIR, filename), "rb") as f:
             client.upload_fileobj(f, S3_BUCKET, filename)
-            LOGGER.info('Upload file {} to s3 completed'.format(filename))
+            logger.info('Upload file {} to s3 completed'.format(filename))
 
     def remove_tmp_file(self, filename):
         filepath = '{}/{}'.format(self.TMP_DIR, filename)
         if path.exists(filepath):
             remove(filepath)
-            LOGGER.info('Delete tmp file {} completed'.format(filename))
+            logger.info('Delete tmp file {} completed'.format(filename))
 
     def extract_drive(self, drive_id):
-        LOGGER.info('extracting drive {}'.format(drive_id))
+        logger.info('extracting drive {}'.format(drive_id))
         folder_ids = [{
             'drive_id': drive_id,
             'next_page_token': None
@@ -134,7 +142,7 @@ class DriveExtractorConsumer(PikaConsumer):
                         item['drive_id'],
                         api_key['value'],
                         item['next_page_token']): item for item in
-                    folder_ids[:NUM_EXTRACTING_FOLDER]}
+                    folder_ids[:CONCURRENT_EXTRACTING_FOLDER]}
                 for future in concurrent.futures.as_completed(futures):
                     item = futures[future]
                     (files, folders, page_token) = future.result()
@@ -150,7 +158,7 @@ class DriveExtractorConsumer(PikaConsumer):
                             'drive_id': folder['id'],
                             'next_page_token': None
                         })
-        LOGGER.info('extracting completed')
+        logger.info('extracting completed')
 
     def prepare_upload(self, filename, api_key):
         try:
@@ -160,10 +168,13 @@ class DriveExtractorConsumer(PikaConsumer):
                     drive_id = row[0]
                     url = "{}/api/get?url={}&api_key={}".format(
                         API_URL, drive_id, api_key)
-                    LOGGER.info('prepare upload for {}'.format(drive_id))
+                    logger.info('prepare upload for {}'.format(drive_id))
                     requests.get(url)
-        except Exception as exc:
-            print(exc)
+        except requests.exceptions.RequestException as exc:
+            logger.error("prepare upload with errors: {}".format(exc))
+
+    def get_user_drive(self, req_id):
+        return self.db_session.query(UserDrive).filter_by(id=req_id).first()
 
     def update_db(self, req_id, **data):
         try:
@@ -171,7 +182,16 @@ class DriveExtractorConsumer(PikaConsumer):
             self.db_session.commit()
         except SQLAlchemyError as exc:
             self.db_session.rollback()
-            raise exc
+            print(exc)
+            logger.error("update db with errors: {}".format(exc))
+
+    def add_balance_log(self, data):
+        try:
+            self.db_session.add(BalanceLog(**data))
+            self.db_session.commit()
+        except SQLAlchemyError as exc:
+            self.db_session.rollback()
+            logger.error('add balance error {}'.format(exc))
 
     def on_message(self, _unused_channel, basic_deliver, properties, body):
         body = json.loads(body)
@@ -179,13 +199,18 @@ class DriveExtractorConsumer(PikaConsumer):
         req_id = body['id']
         api_key = body['api_key']
         upload_flag = body['upload_flag']
-        LOGGER.info('received a message req_id={}\
+        logger.info('received a message req_id={}\
             drive_id={}'.format(req_id, drive_id))
         try:
             if drive_id is None:
-                raise Exception('drive id is missing')
+                raise WorkerException('drive id is missing')
             if req_id is None:
-                raise Exception('req_id is missing')
+                raise WorkerException('req_id is missing')
+
+            user_drive = self.get_user_drive(req_id)
+            if user_drive is None:
+                raise WorkerException('user_drive not found')
+
             filename = '{}_{}.csv'.format(drive_id, req_id)
             total_file = 0
             self.update_db(req_id, status=UserDrive.EXTRACTING_STATUS)
@@ -195,15 +220,24 @@ class DriveExtractorConsumer(PikaConsumer):
                     f.write('\n'.join(drives) + '\n')
             self.update_db(req_id, status=UserDrive.FINISHED_STATUS,
                            total_file=total_file)
-            LOGGER.info('total drive id found: {}'.format(total_file))
-            self.upload_to_s3(filename)
-            if upload_flag:
-                self.prepare_upload(filename, api_key)
-            self.remove_tmp_file(filename)
-            self.acknowledge_message(basic_deliver.delivery_tag)
-        except Exception as exc:
-            LOGGER.info('extracting error: {}'.format(exc))
+            logger.info('total drive id found: {}'.format(total_file))
+            if total_file > 0:
+                self.upload_to_s3(filename)
+                if upload_flag:
+                    self.prepare_upload(filename, api_key)
+                else:
+                    self.add_balance_log({
+                        'user_id': user_drive.user_id,
+                        'balance': (total_file * -1),
+                        'transaction_timestamp': get_unix_time(),
+                        'transaction_type': 'EXPORT_DRIVE',
+                        'source_id': req_id})
+                self.remove_tmp_file(filename)
+        except (Exception, WorkerException) as exc:
+            logger.error('export has error: {}'.format(exc))
             self.update_db(req_id, status=UserDrive.ERROR_STATUS)
+        finally:
+            self.acknowledge_message(basic_deliver.delivery_tag)
 
 
 def main():
