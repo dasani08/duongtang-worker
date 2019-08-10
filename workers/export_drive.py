@@ -21,7 +21,7 @@ S3_BUCKET = 'duongtang'
 AWS_ACCESS_KEY_ID = env.get('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = env.get('AWS_SECRET_ACCESS_KEY')
 AWS_REGION = env.get('AWS_REGION')
-API_URL = env.get('API_URL')
+API_URL = env.get('API_URL', 'http://localhost:5000')
 PAGE_SIZE = 1000
 DRIVE_FILE_MIME_TYPES = {
     'g_file': 'application/vnd.google-apps.file',
@@ -126,6 +126,9 @@ class DriveExtractorConsumer(PikaConsumer):
             remove(filepath)
             logger.info('Delete tmp file {} completed'.format(filename))
 
+    def get_drive_url(self, drive_id):
+        return "https://drive.google.com/open?id={}".format(drive_id)
+
     def extract_drive(self, drive_id):
         logger.info('extracting drive {}'.format(drive_id))
         folder_ids = [{
@@ -147,7 +150,9 @@ class DriveExtractorConsumer(PikaConsumer):
                     item = futures[future]
                     (files, folders, page_token) = future.result()
                     if len(files) > 0:
-                        yield [file['id'] for file in files]
+                        yield [
+                            self.get_drive_url(file['id']) for file in files
+                        ]
                     if page_token:
                         item['next_page_token'] = page_token
                     else:
@@ -198,7 +203,7 @@ class DriveExtractorConsumer(PikaConsumer):
         drive_id = body['drive_id']
         req_id = body['id']
         api_key = body['api_key']
-        upload_flag = body['upload_flag']
+        upload_flag = False
         logger.info('received a message req_id={}\
             drive_id={}'.format(req_id, drive_id))
         try:
