@@ -27,6 +27,29 @@ DRIVE_FILE_MIME_TYPES = {
     'g_file': 'application/vnd.google-apps.file',
     'g_folder': 'application/vnd.google-apps.folder'
 }
+SUPPORTED_VIDEO_MIME_TYPES = [
+    # WebM files (Vp8 video codec; Vorbis Audio codec)
+    'video/webm',
+    # MPEG4, 3GPP, and MOV files(h264 and MPEG4 video codecs AAC audio codec)
+    'video/mp4',
+    'video/3gpp',
+    'video/quicktime',
+    'application/x-mpegURL',
+    # AVI (MJPEG video codec; PCM audio)
+    'video/x-msvideo',
+    # WMV
+    'video/x-ms-wmv',
+    # FLV (Adobe - FLV1 video codec, MP3 audio)
+    'video/x-flv',
+    # MTS
+    'application/metastream',
+    'video/avchd-stream',
+    'video/mts',
+    'video/vnd.dlna.mpeg-tts',
+    # OGG
+    'video/ogg',
+    'application/ogg'
+]
 CONCURRENT_EXTRACTING_FOLDER = 10
 MAX_EXTRACTING_WORKER = 1
 
@@ -58,11 +81,17 @@ class DriveService:
 
     @classmethod
     def get_files(cls, drive_id, api_key, next_page_token=None):
+        supported_mime_types = SUPPORTED_VIDEO_MIME_TYPES + \
+            [DRIVE_FILE_MIME_TYPES['g_folder']]
+        mime_types_query = [
+            'mimeType = "%s"' % mime for mime in supported_mime_types]
+        q = '"%s" in parents and (%s)' % (
+            drive_id, " or ".join(mime_types_query))
         query = {
             'orderBy': 'folder desc',  # trying to list all files on first
             'pageSize': PAGE_SIZE,
             'key': api_key,
-            'q': '"%s" in parents' % (drive_id)
+            'q': q
         }
 
         if next_page_token is not None:
