@@ -93,3 +93,4 @@ data/cached/
 
 # macos files
 .DS_Store
+.envrc
